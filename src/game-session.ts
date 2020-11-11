@@ -1,6 +1,5 @@
-import * as WebSocket from 'ws';
 import SocketInfo from './socket-info';
-import logger from './logger';
+// import logger from './logger';
 
 
 export default class GameSession {
@@ -10,7 +9,15 @@ export default class GameSession {
     constructor(first: SocketInfo, second: SocketInfo) {
         this.firstPlayer = first;
         this.secondPlayer = second;
-        logger.info(`Creating session (${this.firstPlayer.id}, ${this.secondPlayer.id}).`);
+
+        // logger.info(`Creating session (${this.firstPlayer.id}, ${this.secondPlayer.id}).`);
+
+        this.firstPlayer.status = 'inGame';
+        this.secondPlayer.status = 'inGame';
+
+        const startMessage = JSON.stringify({type: 'sessionStarted'});
+        this.firstPlayer.socket.send(startMessage);
+        this.secondPlayer.socket.send(startMessage);
 
         this.firstPlayer.socket.on('message', (message) => {
             let msg = JSON.parse(String(message));
@@ -21,7 +28,7 @@ export default class GameSession {
         });
 
         this.firstPlayer.socket.on('close', () => {
-            logger.info(`Player ${this.firstPlayer.id} disconnected.`);
+            // logger.info(`Player ${this.firstPlayer.id} disconnected.`);
             this.secondPlayer.socket.send(JSON.stringify({type: 'opponentDisconnected'}));
         });
 
@@ -34,7 +41,7 @@ export default class GameSession {
         });
 
         this.secondPlayer.socket.on('close', () => {
-            logger.info(`Player ${this.secondPlayer.id} disconnected.`);
+            // logger.info(`Player ${this.secondPlayer.id} disconnected.`);
             this.firstPlayer.socket.send(JSON.stringify({type: 'opponentDisconnected'}));
         });
     }
