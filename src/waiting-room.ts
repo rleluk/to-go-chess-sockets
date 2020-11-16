@@ -7,13 +7,15 @@ export default class WaitingRoom {
     wss: WebSocket.Server;
     sockets: SocketInfo[] = [];
     sessions: GameSession[] = [];
+    whiteQueue: SocketInfo[] = [];
+    blackQueue: SocketInfo[] = [];
+    bothQueue: SocketInfo[] = [];
     ID: number = 0;
 
     constructor(wss: WebSocket.Server) {
         this.wss = wss;
 
         wss.on('connection', (ws: WebSocket) => {
-            this.checkSockets();
             const newSocket: SocketInfo = {
                 id: this.ID, 
                 socket: ws, 
@@ -29,25 +31,50 @@ export default class WaitingRoom {
                 this.removeSocket(newSocket);
             });
 
-            const waitingUsers = this.sockets.filter(socketInfo => socketInfo.status === 'waiting');
-            if (waitingUsers.length % 2 == 0) {
-                this.sessions.push(new GameSession(waitingUsers[0], waitingUsers[1]));
-            }
+            ws.on('message', (message) => {
+                let msg = JSON.parse(String(message));
+                if (msg.type === 'newGame') {
+                    if (msg.color === 'white') {
+                        this.whiteQueue.push(newSocket);
+                    }
+                    else if (msg.color === 'black') {
+                        this.blackQueue.push(newSocket);
+                    }
+                    else {
+                        this.bothQueue.push(newSocket);
+                    }
+
+                    let white = this.whiteQueue[0];
+                    let black = this.blackQueue[0];
+
+                    let i = 0;
+                    if (!white) {
+                        white = this.bothQueue[i];
+                        i++;
+                    }
+                    if (!black) black = this.bothQueue[i];
+
+                    if (white && black) {
+                        this.whiteQueue = this.whiteQueue.filter(socket => socket !== white && socket !== black);
+                        this.blackQueue = this.blackQueue.filter(socket => socket !== white && socket !== black);
+                        this.bothQueue = this.bothQueue.filter(socket => socket !== white && socket !== black);
+                        this.sessions.push(new GameSession(white, black));
+                    }
+
+                }
+            })
+
         });
+
     }
 
-    checkSockets() {
-        // logger.debug('Checking for closed sockets.');
-        this.sockets.forEach(socketInfo => {
-            if (socketInfo.socket.readyState === WebSocket.CLOSED || socketInfo.socket.readyState === WebSocket.CLOSING) {
-                this.removeSocket(socketInfo);
-            }
-        });
-    }
 
     removeSocket(socketInfo: SocketInfo) {
         // logger.info(`Removing closed socket: ${socketInfo.id}.`)
         this.sockets = this.sockets.filter(si => socketInfo !== si);
-        this.sessions = this.sessions.filter(session => session.firstPlayer !== socketInfo && session.secondPlayer !== socketInfo);  
+        this.sessions = this.sessions.filter(session => session.firstPlayer !== socketInfo && session.secondPlayer !== socketInfo);
+        this.whiteQueue = this.whiteQueue.filter(socket => socket !== socketInfo);
+        this.blackQueue = this.blackQueue.filter(socket => socket !== socketInfo);
+        this.bothQueue = this.bothQueue.filter(socket => socket !== socketInfo);
     }
 }

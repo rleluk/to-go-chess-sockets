@@ -15,9 +15,11 @@ export default class GameSession {
         this.firstPlayer.status = 'inGame';
         this.secondPlayer.status = 'inGame';
 
+        console.log('sessionStarted')
+
         const startMessage = JSON.stringify({type: 'sessionStarted'});
-        this.firstPlayer.socket.send(startMessage);
-        this.secondPlayer.socket.send(startMessage);
+        this.firstPlayer.socket.send(JSON.stringify({type: 'config', color: 'white'}));
+        this.secondPlayer.socket.send(JSON.stringify({type: 'config', color: 'black'}));
 
         this.firstPlayer.socket.on('message', (message) => {
             let msg = JSON.parse(String(message));
