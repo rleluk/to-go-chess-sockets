@@ -1,7 +1,47 @@
 import * as WebSocket from 'ws';
 import GameSession from './game-session';
 import SocketInfo from './socket-info';
+import {StockfishPlayer} from "./common/core/stockfish-player";
+import {Game} from "./common/core/game";
+import {ChessPlayer} from "./common/core/chess-player";
+import {Chessboard} from "./common/core/chessboard";
 // import logger from './logger';
+
+class AiPlayer extends StockfishPlayer {
+    id = -1;
+    status: "inGame" | "waiting" = "inGame";
+    stockfish: any;
+    re = RegExp(/bestmove (\w+)/);
+
+    socket = {
+        on: (event: string, callback: any) => {
+            switch (event) {
+                case 'message':
+                    this.onMessage = callback;
+                    break;
+                case 'close':
+                    this.onClose = callback;
+                    break;
+            }
+        },
+        send: (message: string) => {
+            const data = JSON.parse(message);
+            if (data.type === 'receive') {
+                this.receiveMove(data.move);
+            }
+        }
+    } as WebSocket;
+
+    move(move: string) {
+        this.emitMove.next(move);
+        this.onMessage(JSON.stringify({type: 'move', move}));
+    }
+
+    socketMove = (move: string) => {}
+
+    onMessage = (message: string) => {};
+    onClose = () => {};
+}
 
 export default class WaitingRoom {
     wss: WebSocket.Server;
@@ -16,11 +56,11 @@ export default class WaitingRoom {
         this.wss = wss;
 
         wss.on('connection', (ws: WebSocket) => {
-            const newSocket: SocketInfo = {
+            const newSocket = new SocketInfo({
                 id: this.ID, 
                 socket: ws, 
-                status: 'waiting'
-            };
+                status: 'waiting',
+            });
 
             this.sockets.push(newSocket);
             this.ID++;
@@ -61,6 +101,18 @@ export default class WaitingRoom {
                         this.sessions.push(new GameSession(white, black));
                     }
 
+                }
+                else if (msg.type === 'newAiGame') {
+                    let color = msg.color;
+                    if (color !== 'white' && color !== 'black') {
+                        color = Math.random() > 0.5 ? 'white' : 'black';
+                    }
+                    if (color === 'white') {
+                        this.sessions.push(new GameSession(newSocket, new AiPlayer(15)));
+                    }
+                    else {
+                        this.sessions.push(new GameSession(new AiPlayer(15), newSocket));
+                    }
                 }
             })
 

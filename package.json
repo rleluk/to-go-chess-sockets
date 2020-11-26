@@ -26,6 +26,8 @@
   "dependencies": {
     "@types/ws": "^7.2.7",
     "express": "^4.17.1",
+    "rxjs": "^6.6.3",
+    "stockfish": "^11.0.0",
     "winston": "^3.3.3",
     "ws": "^7.3.1"
   }
