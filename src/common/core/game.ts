@@ -2,34 +2,55 @@ import { Subscription, Subject } from 'rxjs';
 import { Canvas } from '../interfaces/canvas';
 import { Player } from '../interfaces/player';
 import { BoardInfo } from './board-info';
+import GameTree from '../game_tree/game-tree';
+import ChessClock from "../timer/chess-clock";
+import ChessClockConfig from "../timer/chess-clock-config";
+
+class MockClock {
+    startCountdown = () => {}
+    switchClock = () => {}
+    stopCountdown = () => {}
+    getTimes = () => {}
+};
 
 export class Game {
-
+	
 	event: Subject<any> = new Subject<any>();
-
-	private whitePlayer: Player;
-	private blackPlayer: Player;
-
+	
+	whitePlayer: Player;
+	blackPlayer: Player;
+	
+	private gameTree: GameTree;
 	private canvas: Canvas;
-
+	
 	private positionFEN: string;
-
 	private boardInfo: BoardInfo;
 
+	private chessClock: any;
 
 	private whiteSubscription: Subscription;
 	private blackSubscription: Subscription;
 
 	private check: boolean;
 	private mate: boolean;
+	private draw: boolean;
+	private drawOffer: boolean;
+	private drawOfferColor: string;
 
-	init(config: {canvas: Canvas, whitePlayer: Player, blackPlayer: Player, positionFEN?: string}) {
+	private STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+	init(config: {canvas: Canvas, whitePlayer: Player, blackPlayer: Player, chessClockConfig: ChessClockConfig, positionFEN?: string}) {
 		this.canvas = config.canvas;
 		this.whitePlayer = config.whitePlayer;
 		this.blackPlayer = config.blackPlayer;
 		this.boardInfo = new BoardInfo();
+		this.gameTree = new GameTree(this.STARTING_FEN);
+		this.chessClock = config.chessClockConfig ? new ChessClock(config.chessClockConfig): new MockClock();
+		this.draw = false;
+		this.drawOffer = false;
+		this.drawOfferColor = '';
 
-		this.positionFEN = config.positionFEN || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+		this.positionFEN = config.positionFEN || this.STARTING_FEN;
 
 		this.boardInfo.fromFEN(this.positionFEN);
 
@@ -43,20 +64,64 @@ export class Game {
 
 
 		this.canvas.draw(this.positionFEN);
+		this.chessClock.startCountdown();
 	}
 
-
 	private onMove(player: Player, move: string) {
-		if (this.boardInfo.turn === player.color) {
+		if (move === 'draw') {
+			if (this.drawOffer && this.drawOfferColor !== player.color) {
+				this.draw = true;
+				this.event.next({type: 'draw', data: ''});
+				if (player.color === 'white') {
+					this.blackPlayer.receiveMove('draw');
+				}
+				else {
+					this.whitePlayer.receiveMove('draw');
+				}
+			}
+			else if (!this.drawOffer) {
+				this.drawOffer = true;
+				if (player.color === 'white') {
+					this.drawOfferColor = 'white';
+					this.blackPlayer.receiveMove('draw');
+					this.event.next({type: 'draw_offer', data: 'white'});
+				} else {
+					this.drawOfferColor = 'black';
+					this.whitePlayer.receiveMove('draw');
+					this.event.next({type: 'draw_offer', data: 'black'});
+				}
+			}
+		} else if (move === 'surrender') {
+			if (player.color === 'white') {
+				this.blackPlayer.receiveMove(move);
+				this.event.next({type: 'surrender', data: 'white'});
+			}
+			else {
+				this.whitePlayer.receiveMove(move);
+				this.event.next({type: 'surrender', data: 'black'});
+			}
+		}
+		else if (this.boardInfo.turn === player.color) {
 			try {
 				move = this.changePosition(move);
 				this.positionFEN = this.boardInfo.toFEN();
+				this.gameTree.addMove(move, this.positionFEN);
 				this.canvas.draw(this.positionFEN);
+				this.chessClock.switchClock();
+				this.drawOffer = false;
+				this.drawOfferColor = '';
 
 				if (player.color === 'white') {
 					if (this.mate) {
 						this.blackPlayer.receiveMove(move + '#');
 						this.event.next({type: 'mate', data: 'white'});
+						this.chessClock.stopCountdown();
+					}
+					else if (this.draw) {
+						this.blackPlayer.receiveMove(move);
+						this.blackPlayer.receiveMove('draw');
+						this.event.next({type: 'draw', data: ''});
+						this.chessClock.stopCountdown();
 					}
 					else if (this.check) {
 						this.blackPlayer.receiveMove(move + '+');
@@ -69,6 +134,13 @@ export class Game {
 					if (this.mate) {
 						this.whitePlayer.receiveMove(move + '#');
 						this.event.next({type: 'mate', data: 'black'});
+						this.chessClock.stopCountdown();
+					}
+					else if (this.draw) {
+						this.whitePlayer.receiveMove(move);
+						this.whitePlayer.receiveMove('draw');
+						this.event.next({type: 'draw', data: ''});
+						this.chessClock.stopCountdown();
 					}
 					else if (this.check) {
 						this.whitePlayer.receiveMove(move + '+');
@@ -110,6 +182,9 @@ export class Game {
 
 				this.clearCastling(this.boardInfo.turn);
 				this.boardInfo.halfmoveClock++;
+				if (this.boardInfo.halfmoveClock >= 100) {
+					this.draw = true;
+				}
 				this.finishMove();
 				return move;
 			}
@@ -131,6 +206,9 @@ export class Game {
 
 				this.clearCastling(this.boardInfo.turn);
 				this.boardInfo.halfmoveClock++;
+				if (this.boardInfo.halfmoveClock >= 100) {
+					this.draw = true;
+				}
 				this.finishMove();
 				return move;
 			}
@@ -286,8 +364,15 @@ export class Game {
 			}
 		}
 
+		if (type === 'capture' && !this.boardInfo.hasMateMaterial()) {
+			this.draw = true;
+		}
+
 		if (symbol !== 'p' && type !== 'capture') {
 			this.boardInfo.halfmoveClock++;
+			if (this.boardInfo.halfmoveClock >= 100) {
+				this.draw = true;
+			}
 		}
 		else {
 			this.boardInfo.halfmoveClock = 0;
@@ -308,6 +393,10 @@ export class Game {
 		if (this.check) {
 			this.mate = !this.boardInfo.hasMoves(this.boardInfo.turn === 'white' ? 'black' : 'white');
 		}
+		else if (!this.boardInfo.hasMoves(this.boardInfo.turn === 'white' ? 'black' : 'white')) {
+			this.draw = true;
+		}
+
 
 		if (this.boardInfo.turn === 'black') {
 			this.boardInfo.fullmoveNumber++;
@@ -325,7 +414,37 @@ export class Game {
 		}
 	}
 
+	update(positionFEN: string) {
+		this.positionFEN = positionFEN;
+		this.boardInfo.fromFEN(positionFEN);
+		this.canvas.draw(positionFEN);
+	}
+
+	getTimes() {
+		return this.chessClock.getTimes();
+	}
+
 	getBoardInfo() {
 		return this.boardInfo;
+	}
+
+	getChessboard() {
+		return this.canvas;
+	}
+
+	stopClock() {
+		this.chessClock.stopCountdown();
+	}
+
+	getTurn() {
+		return this.boardInfo.turn;
+	}
+	
+	getTree() {
+		return this.gameTree;
+	}
+
+	isDraw() {
+		return this.draw ? true : false;
 	}
 }

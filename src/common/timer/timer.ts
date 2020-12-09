@@ -17,18 +17,20 @@ class Timer {
     }
 
     start = () => {
-        if (this.mode.type === 'fisher') {
+        if (this.mode.type === 'fischer') {
             this.ms += this.mode.toAdd;
         }
 
         this.running = true;
+        let loopTime = Date.now();
         this.interval = setInterval(() => {
-            this.ms -= this.step;
+            this.ms -= this.step * (Date.now() - loopTime);
+            loopTime = Date.now();
             if (this.ms <= 0) {
                 this.finished = true;
                 clearInterval(this.interval);
             }
-        }, 1);
+        }, 10); // it turns out that 10ms is the lowest step
     }
 
     stop = () => {
@@ -45,16 +47,21 @@ class Timer {
         this.start();
     }
 
+    setTime = (ms: number) => {
+        this.ms = ms;
+    }
+
     getTime = () => {
         let ms = this.ms % 1000;
         let seconds = Math.floor(this.ms / 1000);
         let minutes = Math.floor(seconds / 60);
         seconds = seconds % 60;
-
+    
         return {
+            fullMs: this.ms,
             minutes,
             seconds,
-            ms
+            ms,
         };
     }
 

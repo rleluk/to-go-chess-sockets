@@ -1,4 +1,5 @@
 import ChessClock from './chess-clock';
+import ChessClockConfig from './chess-clock-config';
 
 function sleep (time) {
     return new Promise((resolve) => setTimeout(resolve, time));
@@ -13,11 +14,20 @@ let mode = {
 }
 
 // let mode = {
-//     type: 'fisher',
+//     type: 'fischer',
 //     toAdd: 10000
 // }
 
-let clock = new ChessClock(50000, 40000, 5, 1, mode, callback);
+const config: ChessClockConfig = {
+    initMsBlack: 40000,
+    initMsWhite: 40000,
+    stepBlack: 1,
+    stepWhite: 1,
+    mode: mode,
+    endCallback: callback
+}
+
+let clock = new ChessClock(config);
 clock.startCountdown();  
 console.log(clock.getTimes());
 sleep(5000).then(() => {
@@ -35,6 +45,7 @@ sleep(5000).then(() => {
                 sleep(5000).then(() => {
                     clock.switchClock();
                     console.log(clock.getTimes());
+                    clock.stopCountdown();
                 });
             });
         });

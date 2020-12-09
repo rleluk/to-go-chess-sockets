@@ -27,6 +27,10 @@ export class BoardInfo {
     turn: 'white' | 'black';
 
     constructor() {
+        this.init();
+    }
+
+    init(): void {
         for (let row = 0; row < 8; row++) {
             this.board[row] = new Array(8);
         }
@@ -129,7 +133,27 @@ export class BoardInfo {
         return false;
     }
 
+    hasMateMaterial(color?: string): boolean {
+        let light = false;
+        for (let row = 0; row < 8; row++) {
+            for (let column = 0; column < 8; column++) {
+                const piece = this.board[row][column];
+                if (piece && (!color || piece.color === color)) {
+                    if (piece.symbol === 'b' || piece.symbol === 'n') {
+                        if (light) return true;
+                        else light = true;
+                    }
+                    else if (piece.symbol !== 'k') {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     fromFEN(positionFEN: string) {
+        this.init();
         let column = 1;
         let row = 8;
         let i: number;
