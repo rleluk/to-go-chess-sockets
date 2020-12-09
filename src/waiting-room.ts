@@ -2,10 +2,22 @@ import * as WebSocket from 'ws';
 import GameSession from './game-session';
 import SocketInfo from './socket-info';
 import {StockfishPlayer} from "./common/core/stockfish-player";
-import {Game} from "./common/core/game";
-import {ChessPlayer} from "./common/core/chess-player";
-import {Chessboard} from "./common/core/chessboard";
+import ChessClockConfig from "./common/timer/chess-clock-config";
+
 // import logger from './logger';
+
+const clockConfig: ChessClockConfig = {
+    initMsBlack: 300 * 1000,
+    initMsWhite: 300 * 1000,
+    stepBlack: 1,
+    stepWhite: 1,
+    mode: {
+      type: 'standard',
+      toAdd: 5000
+    },
+    endCallback: (winner: string) => {}   
+}
+  
 
 class AiPlayer extends StockfishPlayer {
     id = -1;
@@ -47,9 +59,12 @@ export default class WaitingRoom {
     wss: WebSocket.Server;
     sockets: SocketInfo[] = [];
     sessions: GameSession[] = [];
-    whiteQueue: SocketInfo[] = [];
-    blackQueue: SocketInfo[] = [];
-    bothQueue: SocketInfo[] = [];
+    whiteStandardQueue: SocketInfo[] = [];
+    blackStandardQueue: SocketInfo[] = [];
+    bothStandardQueue: SocketInfo[] = [];
+    whiteFischerQueue: SocketInfo[] = [];
+    blackFischerQueue: SocketInfo[] = [];
+    bothFischerQueue: SocketInfo[] = [];
     ID: number = 0;
 
     constructor(wss: WebSocket.Server) {
@@ -74,33 +89,33 @@ export default class WaitingRoom {
             ws.on('message', (message) => {
                 let msg = JSON.parse(String(message));
                 if (msg.type === 'newGame') {
-                    if (msg.color === 'white') {
-                        this.whiteQueue.push(newSocket);
-                    }
-                    else if (msg.color === 'black') {
-                        this.blackQueue.push(newSocket);
-                    }
-                    else {
-                        this.bothQueue.push(newSocket);
-                    }
+                    if (msg.clockType === 'fischer') {
+                        let players = this.newGame(this.whiteFischerQueue, this.blackFischerQueue, this.bothFischerQueue, newSocket, msg);
+                        let white = players.white;
+                        let black = players.black;
 
-                    let white = this.whiteQueue[0];
-                    let black = this.blackQueue[0];
-
-                    let i = 0;
-                    if (!white) {
-                        white = this.bothQueue[i];
-                        i++;
+                        if (white && black) {
+                            this.whiteFischerQueue = this.whiteFischerQueue.filter(socket => socket !== white && socket !== black);
+                            this.blackFischerQueue = this.blackFischerQueue.filter(socket => socket !== white && socket !== black);
+                            this.bothFischerQueue = this.bothFischerQueue.filter(socket => socket !== white && socket !== black);
+                            let cConfig = {...clockConfig};
+                            cConfig.mode.type = 'fischer';
+                            this.sessions.push(new GameSession(white, black, clockConfig));
+                        }
+                    } else {
+                        let players = this.newGame(this.whiteStandardQueue, this.blackStandardQueue, this.bothStandardQueue, newSocket, msg);
+                        let white = players.white;
+                        let black = players.black;
+    
+                        if (white && black) {
+                            this.whiteStandardQueue = this.whiteStandardQueue.filter(socket => socket !== white && socket !== black);
+                            this.blackStandardQueue = this.blackStandardQueue.filter(socket => socket !== white && socket !== black);
+                            this.bothStandardQueue = this.bothStandardQueue.filter(socket => socket !== white && socket !== black);
+                            let cConfig = {...clockConfig};
+                            cConfig.mode.type = 'standard';
+                            this.sessions.push(new GameSession(white, black, clockConfig));
+                        }
                     }
-                    if (!black) black = this.bothQueue[i];
-
-                    if (white && black) {
-                        this.whiteQueue = this.whiteQueue.filter(socket => socket !== white && socket !== black);
-                        this.blackQueue = this.blackQueue.filter(socket => socket !== white && socket !== black);
-                        this.bothQueue = this.bothQueue.filter(socket => socket !== white && socket !== black);
-                        this.sessions.push(new GameSession(white, black));
-                    }
-
                 }
                 else if (msg.type === 'newAiGame') {
                     let color = msg.color;
@@ -120,13 +135,43 @@ export default class WaitingRoom {
 
     }
 
+    newGame(whiteQueue: SocketInfo[], blackQueue: SocketInfo[], bothQueue: SocketInfo[], newSocket: any, msg: any) {
+        switch (msg.color) {
+            case 'white':
+                whiteQueue.push(newSocket);
+                break;
+            case 'black':
+                blackQueue.push(newSocket);
+                break;
+            default:
+                bothQueue.push(newSocket);
+        }
+
+        let white = whiteQueue[0];
+        let black = blackQueue[0];
+
+        let i = 0;
+        if (!white) {
+            white = bothQueue[i];
+            i++;
+        }
+        if (!black) black = bothQueue[i];
+
+        return {
+            white, 
+            black
+        };
+    }
 
     removeSocket(socketInfo: SocketInfo) {
         // logger.info(`Removing closed socket: ${socketInfo.id}.`)
         this.sockets = this.sockets.filter(si => socketInfo !== si);
         this.sessions = this.sessions.filter(session => session.firstPlayer !== socketInfo && session.secondPlayer !== socketInfo);
-        this.whiteQueue = this.whiteQueue.filter(socket => socket !== socketInfo);
-        this.blackQueue = this.blackQueue.filter(socket => socket !== socketInfo);
-        this.bothQueue = this.bothQueue.filter(socket => socket !== socketInfo);
+        this.whiteStandardQueue = this.whiteStandardQueue.filter(socket => socket !== socketInfo);
+        this.blackStandardQueue = this.blackStandardQueue.filter(socket => socket !== socketInfo);
+        this.bothStandardQueue = this.bothStandardQueue.filter(socket => socket !== socketInfo);
+        this.whiteFischerQueue = this.whiteFischerQueue.filter(socket => socket !== socketInfo);
+        this.blackFischerQueue = this.blackFischerQueue.filter(socket => socket !== socketInfo);
+        this.bothFischerQueue = this.bothFischerQueue.filter(socket => socket !== socketInfo);
     }
 }

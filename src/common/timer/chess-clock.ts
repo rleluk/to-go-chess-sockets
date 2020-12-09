@@ -1,5 +1,5 @@
 import Timer from './timer';
-import Mode from './mode';
+import ChessClockConfig from './chess-clock-config';
 
 interface MoveCount {
     white: number;
@@ -11,11 +11,12 @@ class ChessClock {
     private timerBlack: Timer;
     private moveCount: MoveCount;
     private endCallback: (winner: string) => void;
+    private checkWinnerInterval: any = undefined;
 
-    constructor(initMsBlack: number, initMsWhite: number, stepWhite: number, stepBlack: number, mode: Mode, endCallback: (winner: string) => void) {
-        this.timerWhite = new Timer(mode, initMsWhite, stepWhite);
-        this.timerBlack = new Timer(mode, initMsBlack, stepBlack);
-        this.endCallback = endCallback;
+    constructor(config: ChessClockConfig) {
+        this.timerWhite = new Timer(config.mode, config.initMsWhite, config.stepWhite);
+        this.timerBlack = new Timer(config.mode, config.initMsBlack, config.stepBlack);
+        this.endCallback = config.endCallback;
         this.moveCount = {
             white: 0,
             black: 0
@@ -42,8 +43,8 @@ class ChessClock {
     }
 
     stopCountdown = () => {
-        this.timerWhite.stop();
-        this.timerBlack.stop();
+        this.stopTimers();
+        clearInterval(this.checkWinnerInterval);
     }
 
     getMoveCount = () => this.moveCount;
@@ -55,19 +56,29 @@ class ChessClock {
         }
     }
 
+    setTimes = (times: any) => {
+        this.timerWhite.setTime(times.timeWhite.fullMs);
+        this.timerBlack.setTime(times.timeBlack.fullMs);
+    }
+
     private setCheckInterval = () => {
-        let interval = setInterval(() => {
+        this.checkWinnerInterval = setInterval(() => {
             if(this.timerWhite.isFinished()) {
-                this.stopCountdown();
+                this.stopTimers();
                 this.endCallback('black');
-                clearInterval(interval);
+                clearInterval(this.checkWinnerInterval);
             } 
             else if(this.timerBlack.isFinished()) {
-                this.stopCountdown();
+                this.stopTimers();
                 this.endCallback('white');
-                clearInterval(interval);
+                clearInterval(this.checkWinnerInterval);
             }
         }, 250);
+    }
+
+    private stopTimers = () => {
+        this.timerWhite.stop();
+        this.timerBlack.stop();
     }
 };
 

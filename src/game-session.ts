@@ -1,6 +1,7 @@
 import SocketInfo from './socket-info';
 import {Chessboard} from "./common/core/chessboard";
 import {Game} from "./common/core/game";
+import ChessClockConfig from './common/timer/chess-clock-config';
 // import logger from './logger';
 
 
@@ -10,13 +11,13 @@ export default class GameSession {
     game: Game;
     board: Chessboard;
 
-    constructor(first: SocketInfo, second: SocketInfo) {
+    constructor(first: SocketInfo, second: SocketInfo, chessClockConfig: ChessClockConfig = undefined) {
         this.firstPlayer = first;
         this.secondPlayer = second;
 
         this.board = new Chessboard();
         this.game = new Game();
-        this.game.init({canvas: this.board, whitePlayer: first, blackPlayer: second});
+        this.game.init({canvas: this.board, whitePlayer: first, blackPlayer: second, chessClockConfig});
         first.setBoardInfo(this.game.getBoardInfo());
         second.setBoardInfo(this.game.getBoardInfo());
 
@@ -36,7 +37,7 @@ export default class GameSession {
             let msg = JSON.parse(String(message));
             if (msg.type === 'move') {
                 this.firstPlayer.socketMove(msg.move);
-                this.secondPlayer.socket.send(JSON.stringify({type: 'receive', move: msg.move}));
+                this.secondPlayer.socket.send(JSON.stringify({type: 'receive', move: msg.move, time: this.game.getTimes()}));
             }
         });
 
@@ -49,7 +50,7 @@ export default class GameSession {
             let msg = JSON.parse(String(message));
             if (msg.type === 'move') {
                 this.secondPlayer.socketMove(msg.move);
-                this.firstPlayer.socket.send(JSON.stringify({type: 'receive', move: msg.move}));
+                this.firstPlayer.socket.send(JSON.stringify({type: 'receive', move: msg.move, time: this.game.getTimes()}));
             }
         });
 
