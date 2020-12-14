@@ -39,6 +39,9 @@ export default class GameSession {
                 this.firstPlayer.socketMove(msg.move);
                 this.secondPlayer.socket.send(JSON.stringify({type: 'receive', move: msg.move, time: this.game.getTimes()}));
             }
+            else if (msg.type === 'emote') {
+                this.secondPlayer.socket.send(JSON.stringify({type: 'emote', emote: msg.emote}));
+            }
         });
 
         this.firstPlayer.socket.on('close', () => {
@@ -51,6 +54,9 @@ export default class GameSession {
             if (msg.type === 'move') {
                 this.secondPlayer.socketMove(msg.move);
                 this.firstPlayer.socket.send(JSON.stringify({type: 'receive', move: msg.move, time: this.game.getTimes()}));
+            }
+            else if (msg.type === 'emote') {
+                this.firstPlayer.socket.send(JSON.stringify({type: 'emote', emote: msg.emote}));
             }
         });
 
