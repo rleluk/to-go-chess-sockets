@@ -119,14 +119,15 @@ export default class WaitingRoom {
                 }
                 else if (msg.type === 'newAiGame') {
                     let color = msg.color;
+                    let botLevel = msg.botLevel;
                     if (color !== 'white' && color !== 'black') {
                         color = Math.random() > 0.5 ? 'white' : 'black';
                     }
                     if (color === 'white') {
-                        this.sessions.push(new GameSession(newSocket, new AiPlayer(15)));
+                        this.sessions.push(new GameSession(newSocket, new AiPlayer(botLevel)));
                     }
                     else {
-                        this.sessions.push(new GameSession(new AiPlayer(15), newSocket));
+                        this.sessions.push(new GameSession(new AiPlayer(botLevel), newSocket));
                     }
                 }
             })
